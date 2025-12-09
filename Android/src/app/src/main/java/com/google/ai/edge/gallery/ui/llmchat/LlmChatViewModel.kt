@@ -202,12 +202,8 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 
       while (true) {
         try {
-          val supportImage =
-            model.llmSupportImage &&
-              task.id == com.google.ai.edge.gallery.data.BuiltInTaskId.LLM_ASK_IMAGE
-          val supportAudio =
-            model.llmSupportAudio &&
-              task.id == com.google.ai.edge.gallery.data.BuiltInTaskId.LLM_ASK_AUDIO
+          val supportImage = model.llmSupportImage
+          val supportAudio = model.llmSupportAudio
           LlmChatModelHelper.resetConversation(
             model = model,
             supportImage = supportImage,
