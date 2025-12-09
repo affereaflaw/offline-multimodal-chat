@@ -110,21 +110,10 @@ data class Task(
 
 object BuiltInTaskId {
   const val LLM_CHAT = "llm_chat"
-  const val LLM_PROMPT_LAB = "llm_prompt_lab"
-  const val LLM_ASK_IMAGE = "llm_ask_image"
-  const val LLM_ASK_AUDIO = "llm_ask_audio"
-  const val LLM_MOBILE_ACTIONS = "llm_mobile_actions"
-  const val LLM_TINY_GARDEN = "llm_tiny_garden"
 }
 
-private val allLegacyTaskIds: Set<String> =
-  setOf(
-    BuiltInTaskId.LLM_CHAT,
-    BuiltInTaskId.LLM_PROMPT_LAB,
-    BuiltInTaskId.LLM_ASK_IMAGE,
-    BuiltInTaskId.LLM_ASK_AUDIO,
-  )
-
-fun isLegacyTasks(id: String): Boolean {
-  return allLegacyTaskIds.contains(id)
+/** Check if the task is a legacy task. */
+fun isLegacyTasks(taskId: String): Boolean {
+  return taskId == BuiltInTaskId.LLM_CHAT
 }
+

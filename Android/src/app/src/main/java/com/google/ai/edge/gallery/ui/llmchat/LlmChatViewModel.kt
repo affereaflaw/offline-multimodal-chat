@@ -311,24 +311,4 @@ open class LlmChatViewModelBase() : ChatViewModel() {
     }
 }
 
-@HiltViewModel class LlmAskImageViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext context: Context) : LlmChatViewModelBase() {
-    init {
-        ttsManager = com.google.ai.edge.gallery.ui.common.TtsManager(context)
-    }
 
-    override fun onCleared() {
-        super.onCleared()
-        ttsManager?.shutdown()
-    }
-}
-
-@HiltViewModel class LlmAskAudioViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext context: Context) : LlmChatViewModelBase() {
-    init {
-        ttsManager = com.google.ai.edge.gallery.ui.common.TtsManager(context)
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        ttsManager?.shutdown()
-    }
-}

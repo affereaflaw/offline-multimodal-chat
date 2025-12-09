@@ -153,11 +153,6 @@ private val PREDEFINED_CATEGORY_ORDER = listOf(Category.LLM.id, Category.EXPERIM
 
 private val PREDEFINED_LLM_TASK_ORDER =
   listOf(
-    BuiltInTaskId.LLM_MOBILE_ACTIONS,
-    BuiltInTaskId.LLM_TINY_GARDEN,
-    BuiltInTaskId.LLM_ASK_IMAGE,
-    BuiltInTaskId.LLM_ASK_AUDIO,
-    BuiltInTaskId.LLM_PROMPT_LAB,
     BuiltInTaskId.LLM_CHAT,
   )
 

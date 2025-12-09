@@ -463,12 +463,7 @@ constructor(
       getTasksByIds(
         ids =
           setOf(
-            BuiltInTaskId.LLM_CHAT,
-            BuiltInTaskId.LLM_ASK_IMAGE,
-            BuiltInTaskId.LLM_ASK_AUDIO,
-            BuiltInTaskId.LLM_PROMPT_LAB,
-            BuiltInTaskId.LLM_TINY_GARDEN,
-            BuiltInTaskId.LLM_MOBILE_ACTIONS,
+            BuiltInTaskId.LLM_CHAT
           )
       )) {
       // Remove duplicated imported model if existed.
@@ -477,20 +472,11 @@ constructor(
         Log.d(TAG, "duplicated imported model found in task. Removing it first")
         task.models.removeAt(modelIndex)
       }
-      if (
-        (task.id == BuiltInTaskId.LLM_ASK_IMAGE && model.llmSupportImage) ||
-          (task.id == BuiltInTaskId.LLM_ASK_AUDIO && model.llmSupportAudio) ||
-          (task.id == BuiltInTaskId.LLM_TINY_GARDEN && model.llmSupportAgents) ||
-          (task.id == BuiltInTaskId.LLM_MOBILE_ACTIONS && model.llmSupportAgents) ||
-          (task.id != BuiltInTaskId.LLM_ASK_IMAGE &&
-            task.id != BuiltInTaskId.LLM_ASK_AUDIO &&
-            task.id != BuiltInTaskId.LLM_TINY_GARDEN &&
-            task.id != BuiltInTaskId.LLM_MOBILE_ACTIONS)
-      ) {
-        task.models.add(model)
-      }
+      // Add model to LLM_CHAT task
+      task.models.add(model)
       task.updateTrigger.value = System.currentTimeMillis()
     }
+
 
     // Add initial status and states.
     val modelDownloadStatus = uiState.value.modelDownloadStatus.toMutableMap()
@@ -874,17 +860,7 @@ constructor(
 
       // Add to task.
       tasks.get(key = BuiltInTaskId.LLM_CHAT)?.models?.add(model)
-      tasks.get(key = BuiltInTaskId.LLM_PROMPT_LAB)?.models?.add(model)
-      if (model.llmSupportImage) {
-        tasks.get(key = BuiltInTaskId.LLM_ASK_IMAGE)?.models?.add(model)
-      }
-      if (model.llmSupportAudio) {
-        tasks.get(key = BuiltInTaskId.LLM_ASK_AUDIO)?.models?.add(model)
-      }
-      if (model.llmSupportAgents) {
-        tasks.get(key = BuiltInTaskId.LLM_TINY_GARDEN)?.models?.add(model)
-        tasks.get(key = BuiltInTaskId.LLM_MOBILE_ACTIONS)?.models?.add(model)
-      }
+
 
       // Update status.
       modelDownloadStatus[model.name] =

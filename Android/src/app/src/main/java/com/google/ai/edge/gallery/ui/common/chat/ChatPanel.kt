@@ -542,47 +542,7 @@ fun ChatPanel(
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(vertical = 4.dp))
 
         // Show an info message for ask image task to get users started.
-        if (task.id == BuiltInTaskId.LLM_ASK_IMAGE && messages.isEmpty()) {
-          Column(
-            modifier =
-              Modifier.padding(horizontal = 16.dp).fillMaxSize().semantics(
-                mergeDescendants = true
-              ) {
-                liveRegion = LiveRegionMode.Polite
-              },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-          ) {
-            MessageBodyInfo(
-              ChatMessageInfo(
-                content =
-                  "To get started, click + below to add images (up to 10 in a single session) and type a prompt to ask a question about it."
-              ),
-              smallFontSize = false,
-            )
-          }
-        }
-        // Show an info message for ask audio task to get users started.
-        else if (task.id == BuiltInTaskId.LLM_ASK_AUDIO && messages.isEmpty()) {
-          Column(
-            modifier =
-              Modifier.padding(horizontal = 16.dp).fillMaxSize().semantics(
-                mergeDescendants = true
-              ) {
-                liveRegion = LiveRegionMode.Polite
-              },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-          ) {
-            MessageBodyInfo(
-              ChatMessageInfo(
-                content =
-                  "To get started, tap the + icon to add your audio clip. Limited to 1 clip up to 30 seconds long."
-              ),
-              smallFontSize = false,
-            )
-          }
-        }
+
       }
 
       MessageInputText(
