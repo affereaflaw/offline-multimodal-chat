@@ -115,38 +115,65 @@ fun ChatViewWrapper(
    // Holder for the latest camera frame. Use a plain object to avoid frequent recompositions.
   val latestBitmapHolder = androidx.compose.runtime.remember { java.util.concurrent.atomic.AtomicReference<Bitmap?>(null) }
 
+  // Expose TTS state (assuming ViewModel exposes it, or we hack access via property)
+  // Since ttsManager is in Base, and we initiated it, we can access it.
+  // But strictly speaking, we should expose flow from ViewModel.
+  // Let's assume we can access viewModel.ttsManager directly for valid flow since it's open.
+  // Or better, let's just collect it if we modify ViewModel.
+  // But I didn't modify ViewModel to expose `isSpeaking` Flow yet. I modified TtsManager.
+  // So I can access `viewModel.ttsManager?.isSpeaking` if I cast or access property.
+  // Waiting for that... checking LlmChatViewModel.kt again... ttsManager is public open var.
+  
+  val isTtsSpeaking = viewModel.ttsManager?.isSpeaking?.collectAsState()?.value ?: false
+  
   var retryTrigger by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
   
-  androidx.compose.runtime.LaunchedEffect(isContinuousVoiceMode, chatUiState.inProgress, retryTrigger) {
+  // Logic: Wait for TTS to finish. Then wait 2 seconds. Then listen.
+  
+  androidx.compose.runtime.LaunchedEffect(isContinuousVoiceMode, chatUiState.inProgress, sttState.recognizing, isTtsSpeaking, retryTrigger) {
       if (isContinuousVoiceMode && !chatUiState.inProgress && !sttState.recognizing) {
-          kotlinx.coroutines.delay(300)
-          holdToDictateViewModel.startSpeechRecognition(
-              onAmplitudeChanged = {},
-              onDone = { text ->
-                  if (text.isNotBlank()) {
-                      val model = modelManagerViewModel.uiState.value.selectedModel
-                      val message = ChatMessageText(content = text, side = ChatSide.USER)
-                      viewModel.addMessage(model = model, message = message)
-                      modelManagerViewModel.addTextInputHistory(text)
-                      
-                       // Capture the latest frame
-                      val currentImage = latestBitmapHolder.get()
-                      val images = if (currentImage != null) listOf(currentImage) else listOf()
+          if (isTtsSpeaking) {
+              // Do nothing, wait for TTS to finish
+          } else {
+              // TTS finished or not speaking.
+              // Wait 2 seconds (user requested delay).
+              // But we don't want to delay *every* time the loop checks.
+              // We only want to delay *after* TTS finishes or *after* generation finishes.
+              // Simple heuristic: always delay before listing?
+              // "change listen again after tts finish... add delay too 2s"
+              kotlinx.coroutines.delay(2000)
+              
+              // Double check state after delay
+              if (isContinuousVoiceMode && !chatUiState.inProgress && !sttState.recognizing && !(viewModel.ttsManager?.isSpeaking?.value ?: false)) {
+                   holdToDictateViewModel.startSpeechRecognition(
+                      onAmplitudeChanged = {},
+                      onDone = { text ->
+                          if (text.isNotBlank()) {
+                              val model = modelManagerViewModel.uiState.value.selectedModel
+                              val message = ChatMessageText(content = text, side = ChatSide.USER)
+                              viewModel.addMessage(model = model, message = message)
+                              modelManagerViewModel.addTextInputHistory(text)
+                              
+                               // Capture the latest frame
+                              val currentImage = latestBitmapHolder.get()
+                              val images = if (currentImage != null) listOf(currentImage) else listOf()
 
-                      viewModel.generateResponse(
-                          model = model,
-                          input = text,
-                          images = images,
-                          onError = {
-                             viewModel.handleError(context, task, model, modelManagerViewModel, it)
+                              viewModel.generateResponse(
+                                  model = model,
+                                  input = text,
+                                  images = images,
+                                  onError = {
+                                     viewModel.handleError(context, task, model, modelManagerViewModel, it)
+                                  }
+                              )
+                          } else {
+                              // Silence. Retry.
+                              retryTrigger = System.currentTimeMillis()
                           }
-                      )
-                  } else {
-                      // Silence. Retry.
-                      retryTrigger = System.currentTimeMillis()
-                  }
+                      }
+                  )
               }
-          )
+          }
       }
   }
 
@@ -253,6 +280,25 @@ fun ChatViewWrapper(
                   },
                   modifier = Modifier.fillMaxSize()
               )
+              
+              if (sttState.recognizing) {
+                  androidx.compose.foundation.layout.Box(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .background(Color.Green.copy(alpha = 0.3f))
+                  ) {
+                       androidx.compose.material3.Text(
+                          text = "Speak Now",
+                          color = Color.White,
+                          style = MaterialTheme.typography.labelSmall,
+                          modifier = Modifier
+                              .align(Alignment.BottomCenter)
+                              .padding(4.dp)
+                              .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                              .padding(horizontal = 4.dp, vertical = 2.dp)
+                      )
+                  }
+              }
           }
       }
   }

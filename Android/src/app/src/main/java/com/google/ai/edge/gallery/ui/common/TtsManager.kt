@@ -21,15 +21,35 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import java.util.Locale
 
+import android.speech.tts.UtteranceProgressListener
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 class TtsManager(context: Context) {
     private var tts: TextToSpeech? = null
     private var isInitialized = false
+    
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking = _isSpeaking.asStateFlow()
 
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 isInitialized = true
-                tts?.language = Locale.US // Default to US English
+                tts?.language = Locale.US
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        _isSpeaking.value = true
+                    }
+
+                    override fun onDone(utteranceId: String?) {
+                        _isSpeaking.value = false
+                    }
+
+                    override fun onError(utteranceId: String?) {
+                        _isSpeaking.value = false
+                    }
+                })
             } else {
                 Log.e("TtsManager", "Initialization failed")
             }
@@ -38,13 +58,17 @@ class TtsManager(context: Context) {
 
     fun speak(text: String, queueMode: Int = TextToSpeech.QUEUE_ADD) {
         if (isInitialized) {
-            tts?.speak(text, queueMode, null, null)
+            val params = android.os.Bundle()
+            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "messageID")
+            // Use specific method to ensure utterance ID is passed for listener
+            tts?.speak(text, queueMode, params, "messageID")
         }
     }
 
     fun stop() {
         if (isInitialized) {
             tts?.stop()
+            _isSpeaking.value = false // Force state update
         }
     }
 
