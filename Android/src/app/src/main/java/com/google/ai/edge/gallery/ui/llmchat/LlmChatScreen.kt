@@ -17,17 +17,21 @@
 package com.google.ai.edge.gallery.ui.llmchat
 
 import androidx.hilt.navigation.compose.hiltViewModel
-
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.os.bundleOf
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.firebaseAnalytics
+import com.google.ai.edge.gallery.ui.common.chat.ChatMessage
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageAudioClip
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageImage
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
+import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.common.chat.ChatView
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
@@ -89,6 +93,40 @@ fun ChatViewWrapper(
 ) {
   val context = LocalContext.current
   val task = modelManagerViewModel.getTaskById(id = taskId)!!
+  val holdToDictateViewModel: com.google.ai.edge.gallery.ui.common.textandvoiceinput.HoldToDictateViewModel = hiltViewModel()
+  var isContinuousVoiceMode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+  val sttState by holdToDictateViewModel.uiState.collectAsState()
+  val chatUiState by viewModel.uiState.collectAsState()
+  val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+  var retryTrigger by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+  
+  androidx.compose.runtime.LaunchedEffect(isContinuousVoiceMode, chatUiState.inProgress, retryTrigger) {
+      if (isContinuousVoiceMode && !chatUiState.inProgress && !sttState.recognizing) {
+          kotlinx.coroutines.delay(300)
+          holdToDictateViewModel.startSpeechRecognition(
+              onAmplitudeChanged = {},
+              onDone = { text ->
+                  if (text.isNotBlank()) {
+                      val model = modelManagerViewModel.uiState.value.selectedModel
+                      val message = ChatMessageText(content = text, side = ChatSide.USER)
+                      viewModel.addMessage(model = model, message = message)
+                      modelManagerViewModel.addTextInputHistory(text)
+                      viewModel.generateResponse(
+                          model = model,
+                          input = text,
+                          onError = {
+                             viewModel.handleError(context, task, model, modelManagerViewModel, it)
+                          }
+                      )
+                  } else {
+                      // Silence. Retry.
+                      retryTrigger = System.currentTimeMillis()
+                  }
+              }
+          )
+      }
+  }
 
   ChatView(
     task = task,
@@ -125,8 +163,8 @@ fun ChatViewWrapper(
               context = context,
               task = task,
               model = model,
+              modelManagerViewModel = modelManagerViewModel, 
               errorMessage = errorMessage,
-              modelManagerViewModel = modelManagerViewModel,
             )
           },
         )
@@ -147,8 +185,8 @@ fun ChatViewWrapper(
               context = context,
               task = task,
               model = model,
-              errorMessage = errorMessage,
               modelManagerViewModel = modelManagerViewModel,
+              errorMessage = errorMessage,
             )
           },
         )
@@ -157,8 +195,19 @@ fun ChatViewWrapper(
     onBenchmarkClicked = { _, _, _, _ -> },
     onResetSessionClicked = { model -> viewModel.resetSession(task = task, model = model) },
     showStopButtonInInputWhenInProgress = true,
-    onStopButtonClicked = { model -> viewModel.stopResponse(model = model) },
+    onStopButtonClicked = { model -> 
+        viewModel.stopResponse(model = model)
+        isContinuousVoiceMode = false // Stop voice mode if user manually stops
+        holdToDictateViewModel.stopSpeechRecognition()
+    },
     navigateUp = navigateUp,
     modifier = modifier,
+    isContinuousVoiceMode = isContinuousVoiceMode,
+    onToggleVoiceMode = { 
+        isContinuousVoiceMode = !isContinuousVoiceMode 
+        if (!isContinuousVoiceMode) {
+            holdToDictateViewModel.stopSpeechRecognition()
+        }
+    }
   )
 }

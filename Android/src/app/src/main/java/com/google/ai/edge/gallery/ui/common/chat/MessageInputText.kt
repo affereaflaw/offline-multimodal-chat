@@ -71,6 +71,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FlipCameraAndroid
+import androidx.compose.material.icons.rounded.HeadsetMic
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Photo
@@ -166,6 +167,8 @@ fun MessageInputText(
   showImagePickerInMenu: Boolean = false,
   showAudioItemsInMenu: Boolean = false,
   showStopButtonWhenInProgress: Boolean = false,
+  isContinuousVoiceMode: Boolean = false,
+  onToggleVoiceMode: () -> Unit = {},
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -596,6 +599,28 @@ fun MessageInputText(
                   }
                 }
                 Spacer(modifier = Modifier.width(4.dp))
+                
+                // Continuous Voice Mode Toggle
+                IconButton(
+                  onClick = {
+                      // Check permission first
+                      if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                          onToggleVoiceMode()
+                      } else {
+                          recordAudioClipsPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                      }
+                  },
+                  colors = IconButtonDefaults.iconButtonColors(
+                      containerColor = if (isContinuousVoiceMode) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                      contentColor = if (isContinuousVoiceMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                ) {
+                   Icon(
+                       Icons.Rounded.HeadsetMic,
+                       contentDescription = "Toggle Voice Mode",
+                       modifier = Modifier.size(24.dp)
+                   )
+                }
               }
             }
 

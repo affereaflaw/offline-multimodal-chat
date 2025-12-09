@@ -123,8 +123,10 @@ fun ChatPanel(
   onStreamImageMessage: (Model, ChatMessageImage) -> Unit = { _, _ -> },
   onStreamEnd: (Int) -> Unit = {},
   onStopButtonClicked: () -> Unit = {},
-  onImageSelected: (bitmaps: List<Bitmap>, selectedBitmapIndex: Int) -> Unit = { _, _ -> },
+  onImageSelected: (List<Bitmap>, Int) -> Unit = { _, _ -> }, // (Images, SelectedIndex)
   showStopButtonInInputWhenInProgress: Boolean = false,
+  isContinuousVoiceMode: Boolean = false,
+  onToggleVoiceMode: () -> Unit = {},
 ) {
   val uiState by viewModel.uiState.collectAsState()
   val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
@@ -625,6 +627,8 @@ fun ChatPanel(
         showImagePickerInMenu = selectedModel.llmSupportImage,
         showAudioItemsInMenu = selectedModel.llmSupportAudio,
         showStopButtonWhenInProgress = showStopButtonInInputWhenInProgress,
+        isContinuousVoiceMode = isContinuousVoiceMode,
+        onToggleVoiceMode = onToggleVoiceMode,
       )
     }
   }

@@ -95,6 +95,8 @@ fun ChatView(
   onStreamImageMessage: (Model, ChatMessageImage) -> Unit = { _, _ -> },
   onStopButtonClicked: (Model) -> Unit = {},
   showStopButtonInInputWhenInProgress: Boolean = false,
+  isContinuousVoiceMode: Boolean = false,
+  onToggleVoiceMode: () -> Unit = {},
 ) {
   val uiState by viewModel.uiState.collectAsState()
   val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
@@ -211,6 +213,8 @@ fun ChatView(
                 },
                 modifier = Modifier.weight(1f),
                 showStopButtonInInputWhenInProgress = showStopButtonInInputWhenInProgress,
+                isContinuousVoiceMode = isContinuousVoiceMode,
+                onToggleVoiceMode = onToggleVoiceMode,
               )
             // Model download
             false ->
