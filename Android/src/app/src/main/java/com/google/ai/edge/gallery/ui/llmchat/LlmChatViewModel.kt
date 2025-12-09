@@ -51,6 +51,8 @@ private val STATS =
   )
 
 open class LlmChatViewModelBase() : ChatViewModel() {
+  open var ttsManager: com.google.ai.edge.gallery.ui.common.TtsManager? = null
+
   fun generateResponse(
     model: Model,
     input: String,
@@ -90,6 +92,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
       var prefillSpeed = 0f
       var decodeSpeed: Float
       val start = System.currentTimeMillis()
+      var ttsBuffer = ""
 
       try {
         LlmChatModelHelper.runInference(
@@ -99,6 +102,22 @@ open class LlmChatViewModelBase() : ChatViewModel() {
           audioClips = audioClips,
           resultListener = { partialResult, done ->
             val curTs = System.currentTimeMillis()
+
+            // TTS Buffering Logic
+            ttsManager?.let { tts ->
+                ttsBuffer += partialResult
+                // Speak if buffer has significant length or sentence punctuation
+                val wordCount = ttsBuffer.split("\\s+".toRegex()).size
+                // Check for sentence endings: ., ?, ! (and maybe newlines)
+                val hasPunctuation = ttsBuffer.contains(Regex("[.?!\\n]"))
+                
+                if (wordCount >= 10 || (hasPunctuation && wordCount > 2) || done) {
+                    if (ttsBuffer.isNotBlank()) {
+                        tts.speak(ttsBuffer)
+                    }
+                    ttsBuffer = ""
+                }
+            }
 
             if (firstRun) {
               firstTokenTs = System.currentTimeMillis()
@@ -185,6 +204,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 
   fun stopResponse(model: Model) {
     Log.d(TAG, "Stopping response for model ${model.name}...")
+    ttsManager?.stop() // Stop TTS
     if (getLastMessage(model = model) is ChatMessageLoading) {
       removeLastMessage(model = model)
     }
@@ -197,6 +217,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
   fun resetSession(task: Task, model: Model) {
     viewModelScope.launch(Dispatchers.Default) {
       setIsResettingSession(true)
+      ttsManager?.stop() // Stop TTS
       clearAllMessages(model = model)
       stopResponse(model = model)
 
@@ -269,8 +290,35 @@ open class LlmChatViewModelBase() : ChatViewModel() {
   }
 }
 
-@HiltViewModel class LlmChatViewModel @Inject constructor() : LlmChatViewModelBase()
+@HiltViewModel class LlmChatViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext context: Context) : LlmChatViewModelBase() {
+    init {
+        ttsManager = com.google.ai.edge.gallery.ui.common.TtsManager(context)
+    }
 
-@HiltViewModel class LlmAskImageViewModel @Inject constructor() : LlmChatViewModelBase()
+    override fun onCleared() {
+        super.onCleared()
+        ttsManager?.shutdown()
+    }
+}
 
-@HiltViewModel class LlmAskAudioViewModel @Inject constructor() : LlmChatViewModelBase()
+@HiltViewModel class LlmAskImageViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext context: Context) : LlmChatViewModelBase() {
+    init {
+        ttsManager = com.google.ai.edge.gallery.ui.common.TtsManager(context)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ttsManager?.shutdown()
+    }
+}
+
+@HiltViewModel class LlmAskAudioViewModel @Inject constructor(@dagger.hilt.android.qualifiers.ApplicationContext context: Context) : LlmChatViewModelBase() {
+    init {
+        ttsManager = com.google.ai.edge.gallery.ui.common.TtsManager(context)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ttsManager?.shutdown()
+    }
+}
