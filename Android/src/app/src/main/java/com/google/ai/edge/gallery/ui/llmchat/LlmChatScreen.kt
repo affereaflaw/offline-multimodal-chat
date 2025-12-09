@@ -36,6 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.isActive
 import androidx.core.os.bundleOf
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.firebaseAnalytics
@@ -108,70 +111,93 @@ fun ChatViewWrapper(
   val task = modelManagerViewModel.getTaskById(id = taskId)!!
   val holdToDictateViewModel: com.google.ai.edge.gallery.ui.common.textandvoiceinput.HoldToDictateViewModel = hiltViewModel()
   var isContinuousVoiceMode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+  // Removed isLiveAudioMode toggle
+  
   val sttState by holdToDictateViewModel.uiState.collectAsState()
   val chatUiState by viewModel.uiState.collectAsState()
   val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-   // Holder for the latest camera frame. Use a plain object to avoid frequent recompositions.
+   // Holder for the latest camera frame.
   val latestBitmapHolder = androidx.compose.runtime.remember { java.util.concurrent.atomic.AtomicReference<Bitmap?>(null) }
-
-  // Expose TTS state (assuming ViewModel exposes it, or we hack access via property)
-  // Since ttsManager is in Base, and we initiated it, we can access it.
-  // But strictly speaking, we should expose flow from ViewModel.
-  // Let's assume we can access viewModel.ttsManager directly for valid flow since it's open.
-  // Or better, let's just collect it if we modify ViewModel.
-  // But I didn't modify ViewModel to expose `isSpeaking` Flow yet. I modified TtsManager.
-  // So I can access `viewModel.ttsManager?.isSpeaking` if I cast or access property.
-  // Waiting for that... checking LlmChatViewModel.kt again... ttsManager is public open var.
   
+  // Audio Recorder
+  val audioRecorder = androidx.compose.runtime.remember { com.google.ai.edge.gallery.ui.common.AudioRecorderManager() }
+  val audioAmplitude by audioRecorder.amplitude.collectAsState()
+
+  // Expose TTS state
   val isTtsSpeaking = viewModel.ttsManager?.isSpeaking?.collectAsState()?.value ?: false
   
   var retryTrigger by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
   
-  // Logic: Wait for TTS to finish. Then wait 2 seconds. Then listen.
+  // Logic: Wait for TTS to finish. Then wait 2 seconds. Then listen (via Audio Recorder).
   
-  androidx.compose.runtime.LaunchedEffect(isContinuousVoiceMode, chatUiState.inProgress, sttState.recognizing, isTtsSpeaking, retryTrigger) {
-      if (isContinuousVoiceMode && !chatUiState.inProgress && !sttState.recognizing) {
+  androidx.compose.runtime.LaunchedEffect(isContinuousVoiceMode, chatUiState.inProgress, isTtsSpeaking, retryTrigger) {
+      if (isContinuousVoiceMode && !chatUiState.inProgress) {
           if (isTtsSpeaking) {
-              // Do nothing, wait for TTS to finish
+              // Wait for TTS
           } else {
-              // TTS finished or not speaking.
-              // Wait 2 seconds (user requested delay).
-              // But we don't want to delay *every* time the loop checks.
-              // We only want to delay *after* TTS finishes or *after* generation finishes.
-              // Simple heuristic: always delay before listing?
-              // "change listen again after tts finish... add delay too 2s"
               kotlinx.coroutines.delay(2000)
               
-              // Double check state after delay
-              if (isContinuousVoiceMode && !chatUiState.inProgress && !sttState.recognizing && !(viewModel.ttsManager?.isSpeaking?.value ?: false)) {
-                   holdToDictateViewModel.startSpeechRecognition(
-                      onAmplitudeChanged = {},
-                      onDone = { text ->
-                          if (text.isNotBlank()) {
-                              val model = modelManagerViewModel.uiState.value.selectedModel
-                              val message = ChatMessageText(content = text, side = ChatSide.USER)
-                              viewModel.addMessage(model = model, message = message)
-                              modelManagerViewModel.addTextInputHistory(text)
-                              
-                               // Capture the latest frame
-                              val currentImage = latestBitmapHolder.get()
-                              val images = if (currentImage != null) listOf(currentImage) else listOf()
+              if (isContinuousVoiceMode && !chatUiState.inProgress && !(viewModel.ttsManager?.isSpeaking?.value ?: false)) {
+                   // Always use Live Audio Recording (Multimodal)
+                   audioRecorder.startRecording()
+                   
+                   // VAD Logic
+                   var silenceDuration = 0L
+                   var speechDetected = false
+                   val startTime = System.currentTimeMillis()
+                   
+                   while (isActive && isContinuousVoiceMode) {
+                       kotlinx.coroutines.delay(100)
+                       val ampl = audioAmplitude // RMS from recorder
+                       if (ampl > 2000) { // Threshold
+                           speechDetected = true
+                           silenceDuration = 0
+                       } else {
+                           if (speechDetected) {
+                               silenceDuration += 100
+                           }
+                       }
+                       
+                       // Timeout (max 15s matching buffer or just 10s interaction) or Silence (1.5s)
+                       // If we wait > 15s we lose start of audio in ring buffer, but that's intended (last 15s).
+                       if ((speechDetected && silenceDuration > 1500) || (System.currentTimeMillis() - startTime > 15000)) {
+                           break
+                       }
+                   }
+                   
+                   val audioData = audioRecorder.stopRecording()
+                   // Send if we detected speech OR if user just wants to capture "ambience" (maybe threshold check?)
+                   // User said "differentiate prompt from voice", implied mixed content. 
+                   // If we only send when speechDetected, we might miss "just music". 
+                   // BUT for "Start -> Stop -> Send", we likely want some trigger.
+                   // Let's stick to speech/sound trigger for now to avoid spamming empty rooms.
+                   // Actually, if I listen to music, amplitude > 2000. So it works.
+                   
+                   if (audioData.isNotEmpty() && speechDetected) {
+                        val model = modelManagerViewModel.uiState.value.selectedModel
+                        val audioClip = ChatMessageAudioClip(audioData, audioRecorder.getSampleRate(), ChatSide.USER)
+                        val audioMessages = listOf(audioClip)
 
-                              viewModel.generateResponse(
-                                  model = model,
-                                  input = text,
-                                  images = images,
-                                  onError = {
-                                     viewModel.handleError(context, task, model, modelManagerViewModel, it)
-                                  }
-                              )
-                          } else {
-                              // Silence. Retry.
-                              retryTrigger = System.currentTimeMillis()
-                          }
-                      }
-                  )
+                        // Capture frame
+                        val currentImage = latestBitmapHolder.get()
+                        val images = if (currentImage != null) listOf(currentImage) else listOf()
+                        
+                        viewModel.addMessage(model = model, message = audioClip)
+                        
+                        // Send audio-only (multimodal)
+                        viewModel.generateResponse(
+                              model = model,
+                              input = " ",
+                              images = images,
+                              audioMessages = audioMessages,
+                              onError = {
+                                 viewModel.handleError(context, task, model, modelManagerViewModel, it)
+                              }
+                        )
+                   } else {
+                       retryTrigger = System.currentTimeMillis()
+                   }
               }
           }
       }
@@ -248,7 +274,7 @@ fun ChatViewWrapper(
         onStopButtonClicked = { model -> 
             viewModel.stopResponse(model = model)
             isContinuousVoiceMode = false // Stop voice mode if user manually stops
-            holdToDictateViewModel.stopSpeechRecognition()
+            audioRecorder.stopRecording() // Ensure stop
         },
         navigateUp = navigateUp,
         modifier = Modifier.fillMaxSize(), // ChatView takes full space
@@ -256,7 +282,7 @@ fun ChatViewWrapper(
         onToggleVoiceMode = { 
             isContinuousVoiceMode = !isContinuousVoiceMode 
             if (!isContinuousVoiceMode) {
-                holdToDictateViewModel.stopSpeechRecognition()
+                audioRecorder.stopRecording()
             }
         }
       )
@@ -281,23 +307,18 @@ fun ChatViewWrapper(
                   modifier = Modifier.fillMaxSize()
               )
               
-              if (sttState.recognizing) {
-                  androidx.compose.foundation.layout.Box(
+              // Simple Indicator (Red for recording)
+               androidx.compose.foundation.layout.Box(
+                  modifier = Modifier.fillMaxSize()
+              ) {
+                   androidx.compose.material3.Text(
+                      text = "Transmitting...",
+                      color = Color.Red,
+                      style = MaterialTheme.typography.labelSmall,
                       modifier = Modifier
-                          .fillMaxSize()
-                          .background(Color.Green.copy(alpha = 0.3f))
-                  ) {
-                       androidx.compose.material3.Text(
-                          text = "Speak Now",
-                          color = Color.White,
-                          style = MaterialTheme.typography.labelSmall,
-                          modifier = Modifier
-                              .align(Alignment.BottomCenter)
-                              .padding(4.dp)
-                              .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                              .padding(horizontal = 4.dp, vertical = 2.dp)
-                      )
-                  }
+                          .background(Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                          .padding(horizontal = 4.dp, vertical = 2.dp)
+                  )
               }
           }
       }
