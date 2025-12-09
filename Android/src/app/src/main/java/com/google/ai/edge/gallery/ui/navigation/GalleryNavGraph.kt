@@ -147,9 +147,22 @@ fun GalleryNavHost(
     modelManagerViewModel = modelManagerViewModel,
     tosViewModel = hiltViewModel(),
     navigateToTaskScreen = { task ->
-      pickedTask = task
-      showModelManager = true
-      firebaseAnalytics?.logEvent("capability_select", bundleOf("capability_name" to task.id))
+      val modelManagerUiState = modelManagerViewModel.uiState.value
+      val downloadedModels = task.models.filter {
+        modelManagerUiState.modelDownloadStatus[it.name]?.status == ModelDownloadStatusType.SUCCEEDED
+      }
+
+      if (downloadedModels.isNotEmpty()) {
+        // Navigate directly to the first downloaded model
+        val model = downloadedModels.first()
+        navController.navigate("$ROUTE_MODEL/${task.id}/${model.name}")
+        firebaseAnalytics?.logEvent("capability_select", bundleOf("capability_name" to task.id))
+      } else {
+        // Fallback to showing Model Manager
+        pickedTask = task
+        showModelManager = true
+        firebaseAnalytics?.logEvent("capability_select", bundleOf("capability_name" to task.id))
+      }
     },
   )
 
