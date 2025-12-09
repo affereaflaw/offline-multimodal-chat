@@ -191,6 +191,7 @@ fun ChatViewWrapper(
                               input = " ",
                               images = images,
                               audioMessages = audioMessages,
+                              newSession = true, // Force new session for each live prompt
                               onError = {
                                  viewModel.handleError(context, task, model, modelManagerViewModel, it)
                               }

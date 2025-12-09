@@ -58,12 +58,22 @@ open class LlmChatViewModelBase() : ChatViewModel() {
     input: String,
     images: List<Bitmap> = listOf(),
     audioMessages: List<ChatMessageAudioClip> = listOf(),
+    newSession: Boolean = false,
     onError: (String) -> Unit,
   ) {
     val accelerator = model.getStringConfigValue(key = ConfigKeys.ACCELERATOR, defaultValue = "")
     viewModelScope.launch(Dispatchers.Default) {
       setInProgress(true)
       setPreparing(true)
+
+      // Reset backend conversation if requested (Stateless mode)
+      if (newSession) {
+          LlmChatModelHelper.resetConversation(
+              model = model,
+              supportImage = model.llmSupportImage,
+              supportAudio = model.llmSupportAudio
+          )
+      }
 
       // Loading.
       addMessage(model = model, message = ChatMessageLoading(accelerator = accelerator))
