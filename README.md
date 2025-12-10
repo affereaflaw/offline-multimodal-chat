@@ -31,4 +31,4 @@ This app simplifies the original Gallery codebase by:
 
 ## Disclaimer
 
-This is an open-source demonstration project. While it uses Google's AI Edge tools, it is a simplified fork maintained for educational and experimental purposes.
+This is an open-source demonstration project. While it uses Google's AI Edge tools, it is a simplified fork maintained for educational and experimental purposes. Demo : https://drive.google.com/drive/folders/1CfbuhU2c8I6C9VcMRqIlx_RfbZ-phFTG?usp=sharing
